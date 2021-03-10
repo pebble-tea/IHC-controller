@@ -18,4 +18,4 @@ upload:
 	avrdude -v -p $(ARCH) -c $(PROG_ID) -C $(CONFIG) -P $(PORT) -b $(BAUDRATE) -U flash:w:$(TARGET).hex:i
 
 clean:
-	del $(TARGET).o $(TARGET).elf
+	rm $(TARGET).o $(TARGET).elf
