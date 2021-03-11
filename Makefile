@@ -6,6 +6,13 @@ ARCH 			= atmega328p
 BAUDRATE 	= 115200
 COMPILE 	= avr-gcc -Wall -Os -mmcu=$(ARCH)
 
+ifeq ($(OS), Windows_NT)
+	RM=del
+else
+	RM=rm
+endif
+
+
 all: compile upload clean
 
 compile:
@@ -18,4 +25,4 @@ upload:
 	avrdude -v -p $(ARCH) -c $(PROG_ID) -C $(CONFIG) -P $(PORT) -b $(BAUDRATE) -U flash:w:$(TARGET).hex:i
 
 clean:
-	rm $(TARGET).o $(TARGET).elf
+	$(RM) $(TARGET).o $(TARGET).elf
