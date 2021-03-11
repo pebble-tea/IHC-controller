@@ -4,7 +4,6 @@
 #include <avr/io.h>
 #include <util/delay.h>
 
-
 //added comments !
 
 int main()
