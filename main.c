@@ -1,20 +1,19 @@
 #define F_CPU 16000000UL
-#define BAUDRATE 9600
 
 #define COMPUTE_BAUDRATE(baudrate) (F_CPU/16/baudrate)
 #define COMPUTE_MICROSEC(us) (us*16)
-
-#define SET_OVERFLOW(ovf) (TCNT1=ovf)
 
 #include <stdio.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
 
-#define T_4100  0
-// steps are all defined relative to full step,
+// steps are all relative to full step,
+#define T_4100  0                                // no offset
 #define T_600   (0xFFFF - COMPUTE_MICROSEC(600)) // full step offset (600us)
 #define T_300   (0xFFFF - COMPUTE_MICROSEC(300)) // middle step offset (300us)
 #define T_450   (0xFFFF - COMPUTE_MICROSEC(450)) // quarter step offset (150us)
+
+#define SET_OVERFLOW(ovf) (TCNT1=ovf)
 
 // #region Declarations ~
 
@@ -41,6 +40,10 @@ int main()
     timer1_init(); // Initialize Timer (TIMER1)
     uart_init(COMPUTE_BAUDRATE(9600)); // Initialize Serial (UART)
     uart_print("Connected\n\r");
+
+    //DDRB = _BV(DDB0);
+    //PORTB = _BV(PB0);
+
     return 0;
 }
 
