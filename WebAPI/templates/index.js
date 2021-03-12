@@ -15,3 +15,16 @@ $("#OFF").click(()=>
     console.log("Load was performed.");
   });
 });
+
+$('#points').on('input', function () {
+    $(this).trigger('change');
+});
+
+$("#points").change(function(){
+    var newval=$(this).val();
+    $.get('/api?state='+newval, (data)=>
+    {
+      $( ".result" ).html( data );
+      console.log(data);
+    });
+  });
