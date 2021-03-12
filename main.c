@@ -4,6 +4,8 @@
 #define COMPUTE_BAUDRATE(baudrate) (F_CPU/16/baudrate)
 #define COMPUTE_MICROSEC(us) (us*16)
 
+#define SET_OVERFLOW(ovf) (TCNT1=ovf)
+
 #include <stdio.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -17,14 +19,13 @@
 // #region Declarations ~
 
 // -----------------------------------------------------------------------------
-// Serial UART
+// Serial UART I/O
 // -----------------------------------------------------------------------------
 void      uart_init(uint16_t);
-// TX
+// TX (OUTPUT)
 void      uart_putc(uint8_t);
 void      uart_print(char*);
-
-// RX
+// RX (INPUT)
 uint8_t   uart_getc();
 void      uart_readLine(char*, uint8_t);
 
@@ -121,6 +122,5 @@ void timer1_init()
 
   sei(); // enable interrupts
 }
-
 
 // #endregion
