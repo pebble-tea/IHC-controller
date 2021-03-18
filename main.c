@@ -3,6 +3,11 @@
 #define COMPUTE_BAUDRATE(baudrate) (F_CPU/16/baudrate)
 #define COMPUTE_MICROSEC(us) (us*16)
 
+#define SET(PIN,N) (PIN |=  (1<<N))
+#define CLR(PIN,N) (PIN &= ~(1<<N))
+#define MOD(PIN, N, V) (PIN = ((PIN & ~(1<<N)) | (V << N)))
+#define CHECK(PIN, N) (PIN & (1 << N))
+
 #include <stdio.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
@@ -15,8 +20,24 @@
 
 #define SET_OVERFLOW(ovf) (TCNT1=ovf)
 
+enum STATE { START_STATE, DATA_STATE, END_STATE } FRAME_STATE; // frame state machine
+
+#define OUTPUT_SIZE 8
+
+uint8_t  OFFSET = 0;
+uint16_t outputs[OUTPUT_SIZE] = {0};
+
 // #region Declarations ~
 
+void writeData(uint16_t*, uint8_t);
+void writeParity(uint16_t*);
+
+// -----------------------------------------------------------------------------
+// Atmega328p I/O
+// -----------------------------------------------------------------------------
+void  init_io();
+void  io_writeAll(uint8_t);
+void  io_write(uint8_t, uint8_t);
 // -----------------------------------------------------------------------------
 // Serial UART I/O
 // -----------------------------------------------------------------------------
@@ -33,6 +54,11 @@ void      uart_readLine(char*, uint8_t);
 // -----------------------------------------------------------------------------
 void timer1_init();
 
+// -----------------------------------------------------------------------------
+// I/O
+// -----------------------------------------------------------------------------
+uint8_t get_parity(uint16_t);
+
 // #endregion
 
 int main()
@@ -41,24 +67,119 @@ int main()
     uart_init(COMPUTE_BAUDRATE(9600)); // Initialize Serial (UART)
     uart_print("Connected\n\r");
 
-    //DDRB = _BV(DDB0);
-    //PORTB = _BV(PB0);
+    // init I/O pins and write HIGH to all
+    init_io();
+    io_writeAll(1);
 
+    FRAME_STATE=START_STATE; // start state machine
+
+    while(1){} // infinite loop busy
     return 0;
 }
 
+// write data for each array element with a bit offset
+void writeData(uint16_t* array, uint8_t offset)
+{
+  for(int i=0;i<OUTPUT_SIZE;i++)
+  {
+      uint16_t val = array[i];
+      io_write(i+2, ((val & (1<<offset))>>offset));
+  }
+}
+
+// write parity for each array element
+void writeParity(uint16_t* array)
+{
+  for(int i=0;i<OUTPUT_SIZE;i++)
+  {
+      uint16_t val = array[i];
+      io_write(i+2, get_parity(val));
+  }
+}
+
+// #region Atmega328p I/O ~
+
+void init_io()
+{
+    DDRD = 0b11111100; // all pins are OUTPUTS except from PD0 & PD1
+    DDRB = 0b00000011; // only PB0 & PB1 are OUTPUTS
+}
+
+void  io_writeAll(uint8_t value)
+{
+  for(int i=2;i<OUTPUT_SIZE+2;i++)
+  {
+    io_write(i, value);
+  }
+}
+
+void io_write(uint8_t pin, uint8_t value)
+{
+    if(pin<OUTPUT_SIZE)
+    {
+        MOD(PORTD, pin, value);
+    }
+    else
+    {
+        MOD(PORTB,(pin - OUTPUT_SIZE), value);
+    }
+}
+
+// #endregion
 // #region Interrupt Service Routines  ~
 
 ISR(TIMER1_OVF_vect)
 {
+    switch(FRAME_STATE)
+    {
+        case START_STATE:
+          // PB0 == LOW and OVF=300us
+          // STATE is now DATA
+          io_writeAll(0);
+          SET_OVERFLOW(T_300);
+          FRAME_STATE=DATA_STATE;
+        break;
+        case DATA_STATE:
+          // PB0 == HIGH and OVF=600us
+          // STATE is still DATA
+          io_writeAll(1);
+          SET_OVERFLOW(T_600);
+        break;
+        case END_STATE:
+          // PB0 == HIGH and OVF=0
+          // STATE is now returning to START
+          io_writeAll(1);
+          SET_OVERFLOW(T_4100);
+          //TODO : Serial READ
+          FRAME_STATE=START_STATE;
+        break;
+    }
 }
 
 ISR(TIMER1_COMPA_vect)
 {
+    if(FRAME_STATE==DATA_STATE)
+    {
+        if(OFFSET<16)
+        {
+            // TODO : write data
+            writeData(outputs, OFFSET++);
+        }else
+        {
+           // TODO : write parity
+           FRAME_STATE=END_STATE;
+           writeParity(outputs);
+           OFFSET = 0;
+        }
+    }
 }
 
 ISR(TIMER1_COMPB_vect)
 {
+    if(FRAME_STATE==DATA_STATE || FRAME_STATE==END_STATE)
+    {
+      //CLR(PORTB, PB0);
+    }
 }
 
 // #endregion
@@ -124,6 +245,20 @@ void timer1_init()
   TIMSK1 |= _BV(TOIE1) | _BV(OCIE1B) | _BV(OCIE1A);
 
   sei(); // enable interrupts
+}
+
+// #endregion
+// #region Utils ~
+
+uint8_t get_parity(uint16_t n)
+{
+    uint8_t parity = 0;
+    while (n)
+    {
+        parity = !parity;
+        n = n & (n - 1);
+    }
+    return parity;
 }
 
 // #endregion
