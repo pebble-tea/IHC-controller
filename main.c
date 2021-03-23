@@ -1,4 +1,5 @@
 #define F_CPU 16000000UL
+#define SERIAL_RX_TIMEOUT 100
 
 #define COMPUTE_BAUDRATE(baudrate) (F_CPU/16/baudrate)
 #define COMPUTE_MICROSEC(us) (us*16)
@@ -47,6 +48,7 @@ void      uart_putc(uint8_t);
 void      uart_print(char*);
 // RX (INPUT)
 uint8_t   uart_getc();
+uint8_t   uart_getc_timeout(uint8_t*, uint16_t);
 void      uart_readLine(char*, uint8_t);
 
 // -----------------------------------------------------------------------------
@@ -71,6 +73,9 @@ int main()
     init_io();
     io_writeAll(1);
 
+    outputs[5] = 0b00011111;
+    outputs[6] = 0b00010110;
+
     FRAME_STATE=START_STATE; // start state machine
 
     while(1){} // infinite loop busy
@@ -83,7 +88,7 @@ void writeData(uint16_t* array, uint8_t offset)
   for(int i=0;i<OUTPUT_SIZE;i++)
   {
       uint16_t val = array[i];
-      io_write(i+2, ((val & (1<<offset))>>offset));
+      io_write(i+2, (((val & (1<<offset))>>offset)==0)); // OUTPUT 1 if we have a zero
   }
 }
 
@@ -93,7 +98,7 @@ void writeParity(uint16_t* array)
   for(int i=0;i<OUTPUT_SIZE;i++)
   {
       uint16_t val = array[i];
-      io_write(i+2, get_parity(val));
+      io_write(i+2, (get_parity(val)==0));  // OUTPUT 1 if we have a zero
   }
 }
 
@@ -150,7 +155,15 @@ ISR(TIMER1_OVF_vect)
           // STATE is now returning to START
           io_writeAll(1);
           SET_OVERFLOW(T_4100);
+
           //TODO : Serial READ
+
+          uint8_t timeout = 0;
+          uint8_t index = uart_getc_timeout(&timeout, SERIAL_RX_TIMEOUT);
+          uint16_t value = uart_getc_timeout(&timeout, SERIAL_RX_TIMEOUT);
+
+          if(timeout==0) { outputs[index]=value; }
+
           FRAME_STATE=START_STATE;
         break;
     }
@@ -178,6 +191,7 @@ ISR(TIMER1_COMPB_vect)
 {
     if(FRAME_STATE==DATA_STATE || FRAME_STATE==END_STATE)
     {
+      io_writeAll(0);
       //CLR(PORTB, PB0);
     }
 }
@@ -208,6 +222,14 @@ void uart_print(char *data)
 uint8_t uart_getc()
 {
     loop_until_bit_is_set(UCSR0A, RXC0); /* Wait until data exists. */
+    return UDR0;
+}
+
+uint8_t uart_getc_timeout(uint8_t *timeout, uint16_t ms)
+{
+    uint16_t cycle = COMPUTE_MICROSEC(ms);
+    do { cycle--; } while (bit_is_clear(UCSR0A, RXC0) && cycle>0);
+    *timeout = (cycle<=0);
     return UDR0;
 }
 

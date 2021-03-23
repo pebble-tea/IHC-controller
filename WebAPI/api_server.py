@@ -19,8 +19,6 @@ app = Flask(__name__)
 # Arduino Serial
 # ------------------------------------------------------------------------------
 
-output = [ 0xC3 ]
-
 arduino = serial.Serial(port='COM4', baudrate=9600, timeout=.1)
 
 #def write_read(x):
@@ -41,7 +39,20 @@ def index():
 # API route
 @app.route('/api', methods=['GET'])
 def api():
-    return write_read(request.args["state"])
+
+    try:
+        output = int(request.args['output']);
+        value =  int(request.args['value']);
+        print(bytes([output, value]))
+
+    except Exception as e:
+        data =  "Oops Something went wrong !!<br> {0}".format(str(e))
+        return data, 413 # HTTP_413_REQUEST_ENTITY_TOO_LARGE
+    else:
+        data = "OK"
+        arduino.write(bytes([output, value]));
+
+    return data, 200 # HTTP_200_OK
 
 # allow javascript index.js to be imported !
 @app.route('/index.js')
@@ -51,8 +62,8 @@ def js():
 def io_thread():
     print("Started new Daemon")
     while 1:
-        arduino.write(0x00)
-        time.sleep(0.05)
+        time.sleep(1)
+        #print("slept");
 
 # ------------------------------------------------------------------------------
 # Main
